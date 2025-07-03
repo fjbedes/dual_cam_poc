@@ -1,34 +1,142 @@
 <!DOCTYPE html>
-<!--
-  Copyright (c) 2014 The WebRTC project authors. All Rights Reserved.
-
-  Use of this source code is governed by a BSD-style license
-  that can be found in the LICENSE file in the root of the source
-  tree. An additional intellectual property rights grant can be found
-  in the file PATENTS.  All contributing project authors may
-  be found in the AUTHORS file in the root of the source tree.
--->
 <html>
   <head>
-    <title>Multiple device test (Video Only)</title>
+    <meta charset="utf-8" />
+    <title>Multiple Camera Selection</title>
     <style>
+      body {
+        font-family: sans-serif;
+      }
+      .video-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .camera-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      video {
+        width: 320px;
+        height: 240px;
+        background: #000;
+      }
+      select {
+        margin-bottom: 10px;
+      }
       #messages {
         color: #dc143c;
-        clear: both;
+        margin-top: 20px;
       }
     </style>
   </head>
   <body>
-    <h2>
-      Opens all cameras available and attaches the video stream to indiviual
-      video elements.
-    </h2>
-    <div>
-      <span id="videoArea"></span>
+    <h2>Select cameras and preview their video</h2>
+
+    <div class="video-container">
+      <div class="camera-block">
+        <select id="cameraSelect1"></select>
+        <video id="video1" autoplay playsinline></video>
+      </div>
+      <div class="camera-block">
+        <select id="cameraSelect2"></select>
+        <video id="video2" autoplay playsinline></video>
+      </div>
     </div>
+
     <div id="messages"></div>
-    <!-- Load the polyfill to switch-hit between Chrome and Firefox -->
-    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
-    <script src="js/main.js"></script>
+
+    <script>
+      let devices = [];
+      let currentStreams = [null, null];
+
+      async function init() {
+        try {
+          // Request permission first to get device labels
+          const initialStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          // Stop the initial stream (we just wanted permission and labels)
+          initialStream.getTracks().forEach((track) => track.stop());
+
+          await enumerateCameras();
+        } catch (err) {
+          showError(err);
+        }
+      }
+
+      async function enumerateCameras() {
+        devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+          (d) => d.kind === "videoinput"
+        );
+
+        const selects = [
+          document.getElementById("cameraSelect1"),
+          document.getElementById("cameraSelect2"),
+        ];
+
+        selects.forEach((select) => {
+          select.innerHTML = "";
+          devices.forEach((device, idx) => {
+            const option = document.createElement("option");
+            option.value = device.deviceId;
+            option.text = device.label || `Camera ${idx + 1}`;
+            select.appendChild(option);
+          });
+        });
+
+        // Auto start the first device in both slots
+        if (devices.length > 0) {
+          startStream(0, devices[0].deviceId);
+        }
+        if (devices.length > 1) {
+          startStream(1, devices[1].deviceId);
+        }
+      }
+
+      async function startStream(slot, deviceId) {
+        try {
+          if (currentStreams[slot]) {
+            currentStreams[slot].getTracks().forEach((t) => t.stop());
+          }
+
+          console.log("Requesting deviceId:", deviceId);
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { ideal: deviceId } },
+            audio: false,
+          });
+
+          currentStreams[slot] = stream;
+          const video = document.getElementById(`video${slot + 1}`);
+          video.srcObject = stream;
+        } catch (err) {
+          showError(err);
+        }
+      }
+
+      function showError(err) {
+        const msg = document.getElementById("messages");
+        msg.innerHTML = `Error: ${err.name} - ${err.message}`;
+        console.error(err);
+      }
+
+      document
+        .getElementById("cameraSelect1")
+        .addEventListener("change", (e) => {
+          startStream(0, e.target.value);
+        });
+
+      document
+        .getElementById("cameraSelect2")
+        .addEventListener("change", (e) => {
+          startStream(1, e.target.value);
+        });
+
+      // Start on load
+      init();
+    </script>
   </body>
 </html>
