@@ -48,94 +48,113 @@
     <div id="messages"></div>
 
     <script>
+      // Array to hold all available video input devices (cameras)
       let devices = [];
+      // Array to hold the current MediaStream objects for the two video slots
       let currentStreams = [null, null];
 
+      // This function is called on page load to initialize everything
       async function init() {
         try {
-          // Request permission first to get device labels
+          // Request access to video devices to get permission and labels
           const initialStream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false,
           });
-          // Stop the initial stream (we just wanted permission and labels)
+          // We only needed the stream to get permission and labels, so stop all tracks
           initialStream.getTracks().forEach((track) => track.stop());
 
+          // Now enumerate (list) all cameras
           await enumerateCameras();
         } catch (err) {
+          // If anything goes wrong, display an error message
           showError(err);
         }
       }
 
+      // Enumerate all video input devices and populate the dropdowns
       async function enumerateCameras() {
+        // Get all media devices and filter to only "videoinput" (cameras)
         devices = (await navigator.mediaDevices.enumerateDevices()).filter(
           (d) => d.kind === "videoinput"
         );
 
+        // Get references to the two <select> dropdowns
         const selects = [
           document.getElementById("cameraSelect1"),
           document.getElementById("cameraSelect2"),
         ];
 
+        // For each <select>, populate it with options for all available cameras
         selects.forEach((select) => {
-          select.innerHTML = "";
+          select.innerHTML = ""; // Clear any existing options
           devices.forEach((device, idx) => {
             const option = document.createElement("option");
-            option.value = device.deviceId;
-            option.text = device.label || `Camera ${idx + 1}`;
+            option.value = device.deviceId; // deviceId uniquely identifies the camera
+            option.text = device.label || `Camera ${idx + 1}`; // show label or fallback name
             select.appendChild(option);
           });
         });
 
-        // Auto start the first device in both slots
+        // Automatically start streaming the first two cameras, if available
         if (devices.length > 0) {
-          startStream(0, devices[0].deviceId);
+          startStream(0, devices[0].deviceId); // Start first camera in first video element
         }
         if (devices.length > 1) {
-          startStream(1, devices[1].deviceId);
+          startStream(1, devices[1].deviceId); // Start second camera in second video element
         }
       }
 
+      // Start streaming video from the specified deviceId into the given slot (0 or 1)
       async function startStream(slot, deviceId) {
         try {
+          // If a stream is already active in this slot, stop it first
           if (currentStreams[slot]) {
             currentStreams[slot].getTracks().forEach((t) => t.stop());
           }
 
           console.log("Requesting deviceId:", deviceId);
 
+          // Request a new MediaStream for the selected camera
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { ideal: deviceId } },
+            video: { deviceId: { ideal: deviceId } }, // Request the specific camera
             audio: false,
           });
 
+          // Store the new stream in the currentStreams array
           currentStreams[slot] = stream;
+
+          // Get the corresponding <video> element and set its source
           const video = document.getElementById(`video${slot + 1}`);
           video.srcObject = stream;
         } catch (err) {
+          // Show error if something goes wrong
           showError(err);
         }
       }
 
+      // Display an error message in the #messages div
       function showError(err) {
         const msg = document.getElementById("messages");
         msg.innerHTML = `Error: ${err.name} - ${err.message}`;
         console.error(err);
       }
 
+      // Event listener: when the first camera <select> changes, start the selected stream
       document
         .getElementById("cameraSelect1")
         .addEventListener("change", (e) => {
           startStream(0, e.target.value);
         });
 
+      // Event listener: when the second camera <select> changes, start the selected stream
       document
         .getElementById("cameraSelect2")
         .addEventListener("change", (e) => {
           startStream(1, e.target.value);
         });
 
-      // Start on load
+      // Automatically initialize everything when the page loads
       init();
     </script>
   </body>
